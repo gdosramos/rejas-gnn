@@ -20,9 +20,6 @@ MBHT 2017) — (iv) evaluate with **spatial block cross-validation with buffer z
 **10 seeds (42–51)**, and (v) deliver **calibrated probability maps** P(closure | features) for
 100 % of the segments as GeoPackage/GeoJSON. One command (`make run-all`) reproduces everything.
 
-> **Guía narrada en español**, paso a paso con comandos, figuras y lectura de resultados:
-> [`docs/guia_paso_a_paso.md`](docs/guia_paso_a_paso.md).
-
 ## 1. Scientific description
 
 **Unit of analysis.** A street segment ``s`` between two OpenStreetMap nodes (N = 2 790 in PAC).
@@ -162,10 +159,10 @@ rejas-gnn/
 │   ├── train.py                  full-batch loop, early stopping, repeated spatial CV
 │   ├── pipeline.py               build_dataset · run
 │   └── cli.py                    `rejas-gnn run --config ... --set key=value`
-├── scripts/build_dataset.py · run_battery.py · compare_results.py · fig_01_graph.py · fig_02_splits.py · fig_03_map.py
+├── scripts/build_dataset.py · scripts/compare_results.py
 ├── tests/                        39 pytest tests; tests/test_pipeline.py = dimensions, NaNs, seed conservation, export
 ├── notebooks/                    exploratory analysis only; never the source of results
-├── docs/                         guia_paso_a_paso.md (narrated walkthrough, ES) · spatial_cv.md · reference_results/ (Linux x86 + Apple M1)
+├── docs/                         method notes (spatial CV, leakage audit)
 └── results/                      generated: <experiment>/{summary.json, metrics_per_fold.csv, predictions_oof.csv}, logs/, comparison.md
 ```
 
@@ -193,7 +190,6 @@ make data                       # build + cache the line-graph dataset (data/pro
 make run MODEL=sage             # one experiment  → results/sage_line_pac/
 make all                        # logreg, mlp, gcn, sage, gat on the line graph + comparison table
 make graphs                     # GraphSAGE on radius and union graphs
-make figures                    # figures for steps 2, 3 and 6 of the guide
 make run-all                    # FULL BATTERY: ablation A/B × {mlp,gcn,sage,gat} × seeds 42–51 → results/battery/
 make compare                    # results/comparison.md
 ```
