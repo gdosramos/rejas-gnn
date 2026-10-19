@@ -73,6 +73,47 @@ Block A alone already tells a lot:
 Living streets, service roads and pedestrian ways are gated 18–23 % of the time; residential streets
 1.5 %; avenues never. A **dead end is gated 5.7 times more often** (35.5 % vs 6.2 %).
 
+## The enriched data: what "zonal socio-economics" means here
+
+The ablation hinges on a second block of attributes that does not come from the street network
+but from two official sources, both at the level of the **census block** (*manzana*), the smallest
+unit for which Chile publishes such data. The earlier study attached them to each street segment
+and we reuse that consolidated table (`data/external/aristas_PAC_consolidado.csv`) unchanged.
+
+**Source 1 — Census 2024 (INE), 49 indicators per block.** Proportions and averages describing who
+lives there and how: age structure (`prop_ninos`, `prop_adultos_mayores`, `prom_edad`), household
+composition (`prop_hog_unipersonal`, `prop_jefatura_mujer`, `prop_hog_allegados`), education and
+work (`prom_escolaridad18`, `prop_educ_superior`, `tasa_desocupacion`, `prop_ocup_manual`), tenure
+(`prop_tenencia_propia`, `_arrendada`, `_cedida`), housing type and quality (`prop_viv_casa`,
+`prop_viv_depto`, `prop_viv_precaria`, `prop_viv_hacinadas`, `prop_paredes_solidas`,
+`prop_techo_precario`), services and mobility (`prop_internet_hog`, `prop_auto`,
+`prop_transp_publico`, `prop_camina_trabajo`, `prop_alcantarillado`), and population density
+(`densidad_hab_ha`). Column prefix `cpv24_`.
+
+**Source 2 — Matriz de Bienestar Humano Territorial (MBHT, CIT-UAI, 2017), 20 indices per block.**
+A composite of territorial well-being built by the Centro de Inteligencia Territorial of
+Universidad Adolfo Ibáñez. It has three dimensions and a global score:
+
+| Dimension | Indices (prefix `uai_`) |
+|---|---|
+| Access to urban goods (`dim_acc`) | green areas `iav`, culture `icul`, sports `idep`, health `isal`, services `iser`, education `iej` |
+| Security (`dim_seg`) | property crime `igpe` / `igpr`, violent crime `ilpe` / `ilpr` (two scales each), social vulnerability `isv`, juvenile `ipj` |
+| Socio-economic (`dim_soc`) | socio-economic level `ise`, housing `ivi`, human resources `irh`, employment `iem` |
+| Global | `bht` |
+
+How they reach a segment: for every street segment, the blocks whose centroid lies within 150 m
+are averaged with weights 1/distance (the MBHT sub-block values are first averaged to the 2017
+block). The result is a smooth field: neighbouring segments get almost identical values, which is
+why these variables carry little *local* information and why the buffer in the spatial validation
+matters for them too. Six to seven segments have missing values; they are median-imputed and
+flagged with a `__missing` indicator so the model can see the gap.
+
+Three honest caveats about this block. It is **older than the target** (MBHT 2017, census 2024,
+closures surveyed mostly in 2025). It is **zonal, not segment-level**: it describes the block, not
+the alley. And for the security indices there is a possible **reverse causality**: a gated alley may
+itself change recorded crime. These are exactly the reasons the ablation is designed as A (without)
+versus A + B (with), rather than assuming the enrichment helps.
+
 ## The trap: a random train/test split would be cheating
 
 Because closures come in combs, a randomly held-out alley almost always has its siblings — same
