@@ -50,6 +50,20 @@ def fit_isotonic(y_val: np.ndarray, p_val: np.ndarray) -> IsotonicRegression:
     return iso
 
 
+def brier_skill_score(y: np.ndarray, p: np.ndarray) -> float:
+    """Brier skill score against the constant predictor that always outputs the prevalence.
+
+    ``BSS = 1 - Brier(p) / (pi * (1 - pi))`` with ``pi = mean(y)``. BSS > 0 means the model's
+    probabilities beat "predict the base rate for everyone"; BSS <= 0 means they do not, so the
+    probabilities should not be read as informative risk estimates, however low the ECE.
+    """
+    pi = float(np.mean(y))
+    ref = pi * (1.0 - pi)
+    if ref == 0:
+        return float("nan")
+    return float(1.0 - np.mean((p - y) ** 2) / ref)
+
+
 def full_report(y: np.ndarray, p: np.ndarray, threshold: float) -> dict[str, float]:
     """Discrimination + calibration metrics in one dictionary."""
     assert np.isfinite(p).all(), "non-finite probabilities"
@@ -57,6 +71,7 @@ def full_report(y: np.ndarray, p: np.ndarray, threshold: float) -> dict[str, flo
     p = np.clip(p, 0.0, 1.0)
     out = classification_metrics(y, p, threshold)
     out["ece"] = expected_calibration_error(y, p)
+    out["brier_skill"] = brier_skill_score(y, p)
     return out
 
 

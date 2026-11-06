@@ -27,11 +27,11 @@ from rejas_gnn.evaluation.metrics_and_calibration import (
     reliability_table,
 )
 from rejas_gnn.logging_utils import dump_json, environment_fingerprint
-from rejas_gnn.metrics import morans_i
+from rejas_gnn.metrics import best_f1_threshold, morans_i
 from rejas_gnn.train import train_one_fold
 
 logger = logging.getLogger(__name__)
-METRIC_KEYS = ("pr_auc", "roc_auc", "f1", "precision", "recall", "mcc", "brier", "ece")
+METRIC_KEYS = ("pr_auc", "roc_auc", "f1", "precision", "recall", "mcc", "brier", "brier_skill", "ece")
 
 
 def run_seed(ug: UrbanGraph, cfg: ExperimentConfig, seed: int) -> dict[str, Any]:
@@ -42,6 +42,7 @@ def run_seed(ug: UrbanGraph, cfg: ExperimentConfig, seed: int) -> dict[str, Any]
     oof_raw = np.full(data.num_nodes, np.nan)
     oof_cal = np.full(data.num_nodes, np.nan)
     thresholds: list[float] = []
+    thresholds_cal: list[float] = []
     for fm in spatial_block_kfold(xy, cfg.split, seed=seed, labels=y):
         r = train_one_fold(data, fm, cfg, seed)
         oof_raw[r.test_index] = r.test_prob
@@ -49,15 +50,21 @@ def run_seed(ug: UrbanGraph, cfg: ExperimentConfig, seed: int) -> dict[str, Any]
         if len(yv) and 0 < yv.sum() < len(yv):
             iso = fit_isotonic(yv, r.val_prob)
             oof_cal[r.test_index] = np.clip(iso.predict(r.test_prob), 0.0, 1.0)  # guard fp round-off
+            # The decision threshold must live on the same scale as the probabilities it is
+            # applied to: choose it on the *calibrated* validation predictions, never reuse the
+            # raw-scale threshold (doing so collapsed calibrated F1 to ~0.02 in v0.2).
+            thresholds_cal.append(best_f1_threshold(yv, np.clip(iso.predict(r.val_prob), 0.0, 1.0)))
         else:  # degenerate validation set: no calibration possible
             oof_cal[r.test_index] = r.test_prob
+            thresholds_cal.append(r.threshold)
         thresholds.append(r.threshold)
     assert np.isfinite(oof_raw).all() and np.isfinite(oof_cal).all(), "incomplete OOF coverage"
     thr = float(np.median(thresholds))
+    thr_cal = float(np.median(thresholds_cal))
     return {
         "seed": seed,
         "raw": full_report(y, oof_raw, thr),
-        "calibrated": full_report(y, oof_cal, thr),
+        "calibrated": full_report(y, oof_cal, thr_cal),
         "residual_morans_i": morans_i(y - oof_cal, data.edge_index, data.num_nodes),
         "oof_raw": oof_raw,
         "oof_cal": oof_cal,
@@ -124,6 +131,7 @@ def _write_markdown(t: pd.DataFrame, path: Path) -> None:
     for k, lab in (("pr_auc", "PR-AUC"), ("roc_auc", "ROC-AUC"), ("f1", "F1"), ("mcc", "MCC")):
         show[lab] = [f"{m:.3f} ± {s:.3f}" for m, s in zip(t[f"raw_{k}_mean"], t[f"raw_{k}_std"], strict=True)]
     show["Brier raw→cal"] = [f"{a:.3f} → {b:.3f}" for a, b in zip(t.raw_brier_mean, t.calibrated_brier_mean, strict=True)]
+    show["BSS cal"] = t.calibrated_brier_skill_mean.round(3)
     show["ECE raw→cal"] = [f"{a:.3f} → {b:.3f}" for a, b in zip(t.raw_ece_mean, t.calibrated_ece_mean, strict=True)]
     show["Moran I resid."] = t.residual_morans_i_mean.round(3)
     show = show.sort_values("PR-AUC", ascending=False)

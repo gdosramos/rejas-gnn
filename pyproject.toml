@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rejas-gnn"
-version = "0.1.0"
+version = "0.3.0.dev0"
 description = "Graph Neural Networks for residential street-closure (rejas) prediction in Pedro Aguirre Cerda, Santiago de Chile"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Rejas-GNN contributors" }]
+authors = [{ name = "Gerardo Ramos" }]
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.1",
