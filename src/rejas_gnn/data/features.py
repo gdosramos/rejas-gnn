@@ -108,8 +108,12 @@ def geometry_features(df: pd.DataFrame) -> pd.DataFrame:
 def assemble_feature_matrix(df: pd.DataFrame, extra: list[pd.DataFrame]) -> tuple[np.ndarray, list[str]]:
     """Concatenate feature blocks + external covariates present in ``df``; return (X, names).
 
-    NaNs in external covariates are median-imputed (logged) and an indicator column is added
-    per column with missing values so the model can learn from missingness.
+    NaNs in external covariates are median-imputed (logged) and **one** indicator per source
+    (``cpv24__any_missing``, ``uai__any_missing``) flags the rows with any gap in that source.
+
+    Why one per source and not one per column: in PAC the gaps affect 7 segments with only 3
+    distinct patterns, so per-column indicators produced 69 near-identical binary columns
+    (168 features instead of 101) that diluted the ablation A vs A+B without adding information.
     """
     blocks = list(extra)
     ext_cols = [c for c in df.columns if c not in NON_FEATURE_COLUMNS
@@ -117,7 +121,11 @@ def assemble_feature_matrix(df: pd.DataFrame, extra: list[pd.DataFrame]) -> tupl
     if ext_cols:
         ext = df[ext_cols].apply(pd.to_numeric, errors="coerce")
         na_cols = [c for c in ext_cols if ext[c].isna().any()]
-        indicators = {f"{c}__missing": ext[c].isna().astype(float) for c in na_cols}
+        indicators = {}
+        for prefix in ("cpv24_", "uai_"):
+            cols = [c for c in na_cols if c.startswith(prefix)]
+            if cols:
+                indicators[f"{prefix.rstrip('_')}__any_missing"] = ext[cols].isna().any(axis=1).astype(float)
         ext = ext.fillna(ext.median(numeric_only=True))
         ext = pd.concat([ext, pd.DataFrame(indicators, index=ext.index)], axis=1)
         if na_cols:
