@@ -28,7 +28,8 @@ def test_no_label_columns_in_features(toy_segments):
     blocks = [network_features(toy_segments, g), geometry_features(toy_segments)]
     X, names = assemble_feature_matrix(toy_segments, blocks)
     assert not LABEL_LEAK_COLUMNS.intersection(names)
-    assert "uai_bht__missing" in names  # missingness indicator added
+    assert "uai__any_missing" in names  # one missingness indicator per covariate source
+    assert not any(n.endswith("__missing") for n in names)  # no per-column indicators (v0.2 design)
     assert np.isfinite(X).all() and X.shape[0] == 4
 
 

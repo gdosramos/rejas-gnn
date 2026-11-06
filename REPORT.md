@@ -105,11 +105,15 @@ How they reach a segment: for every street segment, the blocks whose centroid li
 are averaged with weights 1/distance (the MBHT sub-block values are first averaged to the 2017
 block). The result is a smooth field: neighbouring segments get almost identical values, which is
 why these variables carry little *local* information and why the buffer in the spatial validation
-matters for them too. Six to seven segments have missing values; they are median-imputed and
-flagged with a `__missing` indicator so the model can see the gap.
+matters for them too. Seven segments have missing values; they are median-imputed and flagged
+with one indicator per source (`cpv24__any_missing`, `uai__any_missing`), so block B has 101
+features (28 + 71 covariates + 2 flags). Up to v0.2 one flag per column was added, which produced
+69 near-identical columns and a 168-feature block; the ablation was re-run without them.
 
-Three honest caveats about this block. It is **older than the target** (MBHT 2017, census 2024,
-closures surveyed mostly in 2025). It is **zonal, not segment-level**: it describes the block, not
+Three honest caveats about this block. Its **timing does not match the target**: the `año`
+column of the survey dates 109 of the 217 closures to 2012–2015 and 97 to 2022–2024, and only 11
+to 2025, so for most closures the census 2024 and even the MBHT 2017 are measured *after* the gate
+was installed. It is **zonal, not segment-level**: it describes the block, not
 the alley. And for the security indices there is a possible **reverse causality**: a gated alley may
 itself change recorded crime. These are exactly the reasons the ablation is designed as A (without)
 versus A + B (with), rather than assuming the enrichment helps.
@@ -272,8 +276,13 @@ results/        generated, git-ignored
 ## Limitations and next steps
 
 * Segment geometries are straight lines between endpoints; real polylines would refine lengths and maps.
-* Covariates date from 2017/2024, the survey mostly from 2025; the survey's `año` column and field
-  protocol are undocumented.
+* **The label mixes temporal cohorts.** All open segments carry `año` = 2025, while closures are
+  dated mostly 2012–2015 (109) and 2022–2024 (97). The two cohorts follow the two Chilean laws that
+  regulate street closures (Ley 20.499 of 2011, which requires a single access, and Ley 21.411 of
+  2022, which extends closures to streets with two accesses), and the share of dead ends differs
+  between them (31 % vs 19 %). Whether the closures come from municipal permit records or from
+  field observation is being confirmed with the data provider; until then the model may be learning
+  *legal eligibility* as much as residents' behaviour, and results stratified by cohort are pending.
 * Condominium gates are treated as "not gated" to match the original study (`data.drop_condominio` switches this).
 * Next: inductive transfer to La Florida (the pipeline supports it with one config file), an
   ablation by feature block (network / geometry / road class) to attribute the signal, and a
