@@ -6,7 +6,7 @@ GRAPH_VARIANTS := sage_union sage_radius
 export PYTHONHASHSEED := 0
 export CUBLAS_WORKSPACE_CONFIG := :4096:8
 
-.PHONY: help install install-dev test lint data run all graphs compare run-all baselines figures clean
+.PHONY: help install install-dev test lint data run all graphs compare run-all baselines paired figures clean
 
 help:
 	@echo "make install      install package and dependencies"
@@ -18,6 +18,7 @@ help:
 	@echo "make graphs       run GraphSAGE on radius and union graphs"
 	@echo "make baselines    non-neural baselines, same folds as the battery"
 	@echo "make run-all      full battery (ablation x models x seeds 42-51)"
+	@echo "make paired       paired comparisons over seeds (needs run-all + baselines)"
 	@echo "make figures      figures; requires make run-all first"
 	@echo "make compare      aggregate results/*/summary.json into results/comparison.md"
 	@echo "make clean        remove caches and results"
@@ -54,6 +55,9 @@ run-all:            ## Full Phase-2 battery: ablation A/B x {mlp,gcn,sage,gat} x
 
 baselines:          ## Non-neural baselines under the identical spatial protocol
 	$(PYTHON) scripts/run_baselines.py --config $(CONFIG_DIR)/base.yaml --out results/baselines
+
+paired:             ## Paired per-seed comparisons with bootstrap CI and Wilcoxon test
+	$(PYTHON) scripts/paired_comparison.py --battery results/battery --baselines results/baselines --out results/paired
 
 figures:            ## Steps 2, 3 and 6 of docs/guia_paso_a_paso.md (needs results/battery from run-all)
 	@test -d results/battery || (echo "results/battery missing: run 'make run-all' first" && exit 1)
