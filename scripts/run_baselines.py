@@ -32,7 +32,12 @@ from sklearn.linear_model import LogisticRegression
 from rejas_gnn.config import load_config
 from rejas_gnn.data.graph_builder import build_urban_graph
 from rejas_gnn.data.splits import spatial_block_kfold
-from rejas_gnn.evaluation.metrics_and_calibration import fit_isotonic, full_report
+from rejas_gnn.evaluation.metrics_and_calibration import (
+    export_probability_map,
+    fit_isotonic,
+    full_report,
+    reliability_table,
+)
 from rejas_gnn.logging_utils import dump_json, environment_fingerprint, setup_logging
 from rejas_gnn.metrics import best_f1_threshold
 
@@ -83,7 +88,7 @@ def run_seed(fitter: Fitter, xy: np.ndarray, y: np.ndarray, cfg, seed: int) -> d
             oof_cal[te] = p_te
             thr_cal.append(thr_raw[-1])
     assert np.isfinite(oof_raw).all() and np.isfinite(oof_cal).all()
-    return {"seed": seed,
+    return {"seed": seed, "oof_raw": oof_raw, "oof_cal": oof_cal,
             "raw": full_report(y, oof_raw, float(np.median(thr_raw))),
             "calibrated": full_report(y, oof_cal, float(np.median(thr_cal)))}
 
@@ -125,8 +130,15 @@ def main() -> None:
                 v = np.array([r[kind][k] for r in per_seed], dtype=float)
                 summ[f"{kind}_{k}_mean"], summ[f"{kind}_{k}_std"] = float(np.nanmean(v)), float(np.nanstd(v, ddof=1))
         rows.append(summ)
-        dump_json({"environment": environment_fingerprint(), "summary": summ, "per_seed": per_seed},
+        dump_json({"environment": environment_fingerprint(), "summary": summ,
+                   "per_seed": [{k: v for k, v in r.items() if not k.startswith("oof")} for r in per_seed]},
                   a.out / f"{name}.json")
+        if name == "logreg_all":  # the best model: export its out-of-fold map, like the battery does
+            cal = np.stack([r["oof_cal"] for r in per_seed])
+            reliability_table(y, cal.mean(0)).to_csv(a.out / f"{name}_reliability.csv", index=False)
+            export_probability_map(ug.segments, cal.mean(0), a.out / f"{name}_p_closure.gpkg",
+                                   extra={"p_closure_raw": np.mean([r["oof_raw"] for r in per_seed], 0),
+                                          "p_closure_std_seeds": cal.std(0)})
         logger.info("== %s | PR-AUC %.3f±%.3f | ROC-AUC %.3f±%.3f | BSS cal %.3f", name,
                     summ["raw_pr_auc_mean"], summ["raw_pr_auc_std"], summ["raw_roc_auc_mean"],
                     summ["raw_roc_auc_std"], summ["calibrated_brier_skill_mean"])
