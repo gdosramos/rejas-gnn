@@ -11,9 +11,11 @@ predict which of its segments are gated, and which kind of information makes tha
 Models are evaluated with spatial block cross-validation with 200 m buffers, so that no score can
 be obtained by copying the label of a neighbouring alley.
 
-> **Status (v0.3, in progress).** Non-neural baselines, paired statistical comparisons and a
-> Brier skill score were added; [`REPORT.md`](REPORT.md) states the findings they support. Pending:
-> confirming the provenance of the closure dates and results stratified by cohort.
+> **Main result.** Closures are predictable in neighbourhoods the model never saw, but the best
+> model is linear, the signal sits in a few variables (road class, dead end, location), the street
+> graph adds nothing demonstrable, zonal socio-economics do not help, and the same pattern holds in
+> both registration cohorts (2012–2015 and 2022–2025). Details and statistics in
+> [`REPORT.md`](REPORT.md); Spanish version in [`docs/guia_paso_a_paso.md`](docs/guia_paso_a_paso.md).
 
 ## Current results
 
@@ -47,6 +49,7 @@ python -m pytest                       # graph, no-leakage features, buffer, det
 make baselines                         # ~1 min  → results/baselines/baselines_results.md
 make run-all                           # 20–40 min on CPU → results/battery/battery_results.md
 make paired                            # paired comparisons with CI → results/paired/
+make cohorts                           # the two registration cohorts → results/cohorts/
 make figures                           # after run-all → results/figures/
 ```
 

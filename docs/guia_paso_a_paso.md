@@ -1,47 +1,54 @@
-# Guía paso a paso: de la red vial de Pedro Aguirre Cerda a un mapa de probabilidad de cierre
+# Guía paso a paso: qué calles se cierran en Pedro Aguirre Cerda y qué lo predice
 
-> Esta guía acompaña al [README](../README.md) técnico. Cuenta, en orden y con sus comandos,
-> qué hace cada pieza del estudio y qué significa lo que imprime. Los números marcados con
-> `[reproducido el AAAA-MM-DD en <máquina>]` deben actualizarse cada vez que alguien repita el
-> recorrido; los que no coinciden exactamente se explican en §Reproducibilidad.
+> Esta guía acompaña al [informe en inglés](../REPORT.md) y al [README](../README.md). Cuenta, en
+> orden y con sus comandos, qué hace cada pieza del estudio y cómo leer lo que imprime. Las marcas
+> `[reproducido el AAAA-MM-DD en <máquina>]` indican dónde y cuándo se obtuvo cada cifra.
+> Versión 0.3: incorpora líneas base, comparaciones pareadas y el análisis por cohorte, y
+> reemplaza las conclusiones de la versión 0.2.
 
 ## 0. La pregunta
 
 En Pedro Aguirre Cerda (PAC) muchos pasajes y calles han sido cerrados por los propios vecinos
-con rejas y portones. Un levantamiento en terreno clasificó los 2 790 tramos de calle de la
-comuna (según OpenStreetMap) en `abierta`, `cierre`, `informal`, `medio` o `condominio`.
-La pregunta del estudio es:
+con rejas y portones. Un levantamiento clasificó los 2 790 tramos de calle de la comuna (según
+OpenStreetMap) en `abierta`, `cierre`, `informal`, `medio` o `condominio`. La pregunta es:
 
 **¿Se puede predecir qué tramos se cierran a partir de su posición en la red vial y de las
 características de su entorno, y cuánto aporta cada tipo de información?**
 
-El estudio original (dos enfoques: campo de densidad fractal y mapas auto-organizados sobre
-índices de bienestar territorial) describía patrones; este repositorio convierte la pregunta en
-una afirmación **falsable**: un modelo que no vio un barrio debe predecir sus cierres.
+Un trabajo exploratorio previo, no publicado, describió el patrón con un campo de densidad
+fractal y mapas autoorganizados. Este repositorio convierte la pregunta en una afirmación
+**falsable**: un modelo que no vio un barrio debe predecir sus cierres. El diseño es predictivo:
+no permite afirmar *por qué* los vecinos cierran.
 
 ## 1. Preparar el entorno
 
 ```bash
 cd ~/Proyectos/rejas-gnn
 conda create -n rejas-gnn python=3.11 -y && conda activate rejas-gnn
-PY=~/miniconda3/envs/rejas-gnn/bin/python          # usar siempre este intérprete
-$PY -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-$PY -m pip install -e ".[dev]"
-$PY -m pytest -v
+python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python3 -m pip install -r requirements-lock.txt     # versiones exactas de la corrida de referencia
+python3 -m pip install -e ".[dev]" --no-deps
+python3 -m pytest
 ```
 
-**Qué comprueban los 39 tests:** que el grafo dual se construye bien (`test_graph`), que ninguna
-variable derivada de la etiqueta entra a las features (`test_features`), que ningún tramo
-supervisado queda a < 200 m de un tramo de test (`test_splits`), que los GNN usan el grafo y los
-baselines no, y que la misma semilla produce los mismos pesos (`test_models`), y que la carga
-geográfica, los tensores y la exportación son válidos (`test_pipeline`).
+**Ojo con `python`.** Si tu shell define un alias de `python` (por ejemplo en `~/.zshrc`), puede
+apuntar a otro entorno aunque `conda activate` diga lo contrario. Usa `python3`, que es lo que
+usa el `Makefile`, y verifica con `which python3`.
 
-`[reproducido el 2026-10-19 en MacBook Apple M1, Python 3.11: 39 passed in 93 s]`
+**Qué comprueban los 42 tests:** que el grafo dual se construye bien (`test_graph`), que ninguna
+variable derivada de la etiqueta entra a las features y que los datos faltantes se marcan con un
+indicador por fuente (`test_features`), que ningún tramo supervisado queda a menos de 200 m de un
+tramo de test (`test_splits`), que los modelos de grafos usan el grafo y la misma semilla produce
+los mismos pesos (`test_models`), que la carga geográfica y la exportación son válidas
+(`test_pipeline`) y que el puntaje de habilidad de Brier y el umbral calibrado se calculan bien
+(`test_calibration`).
+
+`[reproducido el 2026-11-06 en MacBook Apple M1, Python 3.11: 42 passed]`
 
 ## 2. El grafo urbano: qué ve el modelo
 
 ```bash
-$PY scripts/fig_01_graph.py
+python3 scripts/fig_01_graph.py
 ```
 
 La unidad de análisis es el **tramo de calle** (arista OSM entre dos esquinas). Para que un
@@ -77,7 +84,7 @@ significativa, pero moderada. Suficiente para que un reparto aleatorio train/tes
 ## 3. Validación espacial: por qué no se puede partir al azar
 
 ```bash
-$PY scripts/fig_02_splits.py
+python3 scripts/fig_02_splits.py
 ```
 
 Si un pasaje de test tiene a sus hermanos del mismo peine en train, cualquier modelo (y un GNN
@@ -103,145 +110,164 @@ en un barrio no relevado. Por eso:
 `fig02c`: con un split aleatorio, el **99 %** de los tramos de test tiene un tramo etiquetado a
 < 100 m (mediana ≈ 30 m); con bloques + buffer, **ninguno** a < 200 m.
 
-**El precio, que el paper debe declarar:** cada fold entrena con solo 83–136 cierres de 217, el
+**El precio, que el informe declara:** cada fold entrena con solo 83–136 cierres de 217, el
 buffer "gasta" 250–440 tramos y los folds son desiguales (30–60 cierres en test). Las métricas
 tendrán varianza alta; es un estimador **pesimista** (extrapolación a un barrio nuevo), que es
 el que corresponde a la pregunta.
 
 `[reproducido el 2026-10-19 en Apple M1: tabla idéntica]`
 
-## 4. Un primer modelo: cuánto dice la morfología sola
+## 4. Las líneas base: cuánto dice la morfología sola
 
 ```bash
-$PY -m rejas_gnn.cli run --config configs/logreg.yaml --set data.feature_set=geometry name=paso4_logreg_geometria
-$PY -m rejas_gnn.cli run --config configs/sage.yaml   --set data.feature_set=geometry name=paso4_sage_geometria
+make baselines
 ```
 
-Solo las 28 variables de red y geometría; 5 semillas × 5 folds; evaluación únicamente en los
-bloques de test.
+Antes de cualquier red neuronal hay que saber qué logra lo más simple, con **las mismas
+particiones, semillas y métricas** que la batería: una tabla de 12 celdas
+P(cierre | clase de vía, sin salida) y una regresión logística sobre las 28 variables del bloque
+A, más dos versiones de la logística sin clase de vía y sin distancia al centroide.
 
-| Modelo | PR-AUC | ROC-AUC | F1 | I Moran residuos |
+| Modelo | Variables | PR-AUC | ROC-AUC | BSS calibrado |
 |---|---|---|---|---|
-| Regresión logística | 0,274 ± 0,126 | 0,836 ± 0,082 | 0,307 ± 0,150 | 0,253 |
-| GraphSAGE | 0,257 ± 0,108 | 0,831 ± 0,048 | 0,316 ± 0,140 | 0,232 |
+| Prevalencia constante | – | 0,071 | 0,440 | ≈ 0 |
+| Tabla clase de vía × sin salida | 2 | 0,202 ± 0,025 | 0,805 ± 0,018 | +0,011 |
+| **Regresión logística** | 28 | **0,286 ± 0,024** | **0,871 ± 0,012** | **+0,056** |
+| Logística sin clase de vía | 18 | 0,197 ± 0,018 | 0,772 ± 0,013 | −0,003 |
+| Logística sin distancia al centroide | 27 | 0,218 ± 0,018 | 0,822 ± 0,016 | −0,002 |
 
-**Cómo leerlo.** ROC-AUC 0,83: en un barrio nunca visto, el modelo ordena correctamente un
-tramo cerrado frente a uno abierto el 83 % de las veces. PR-AUC 0,26 es la métrica honesta con
-7,8 % de positivos (el azar vale 0,078): 3,4× el azar. El ± refleja la varianza entre folds
-anticipada en §3. La I de Moran de los residuos (0,23) dice que lo que el modelo no explica
-sigue agrupado: hay estructura local que estas 28 variables no capturan. Y **la regresión
-logística iguala a GraphSAGE**: con validación honesta, mirar a los vecinos no suma de forma
-medible.
+`[reproducido el 2026-11-06 en Apple M1]`
 
-Conviene abrir `results/paso4_sage_geometria/metrics_per_fold.csv`: hay folds que paran en la
-época 2 con F1 = 0 porque la validación tenía pocos cierres; con 10 semillas estos accidentes
-se promedian, pero el CSV deja que cualquiera los audite.
-
-`[reproducido el 2026-10-19 en Apple M1: SAGE PR-AUC 0,257 ± 0,107, ROC-AUC 0,831 ± 0,048, F1 0,313 ± 0,134, Moran 0,223]`
+**Cómo leerlo.** ROC-AUC 0,87: en un barrio nunca visto, el modelo ordena un tramo cerrado por
+sobre uno abierto el 87 % de las veces. PR-AUC 0,29 es la métrica honesta con 7,8 % de positivos
+(el azar vale 0,078): 3,7 veces el azar. El **BSS** (puntaje de habilidad de Brier) compara las
+probabilidades con la estrategia trivial de predecir 7,8 % para todos los tramos: positivo
+significa que las probabilidades informan algo; negativo, que no. Quitar la clase de vía o la
+distancia al centroide cuesta mucho, así que la señal se concentra en pocas variables, y parte
+de ella es *ubicación*, no morfología.
 
 ## 5. La batería: ablación × arquitecturas × 10 semillas
 
 ```bash
-nohup $PY scripts/run_battery.py > results/battery_run.out 2>&1 &
-grep "== " results/battery_run.out | cut -c66-        # avance: 8 líneas al terminar
+make run-all          # 20-40 min en un portátil
+cat results/battery/battery_results.md
 ```
 
-Responde tres preguntas a la vez: (1) ¿la socioeconomía zonal (Censo 2024 + MBHT 2017, 140
-variables) mejora la predicción? — Experimento A (solo geometría, 28 features) vs B
-(geometría + socio, 168 features); (2) ¿qué arquitectura funciona? — MLP (sin grafo), GCN,
-GraphSAGE, GATv2; (3) ¿cuánto varían los resultados? — semillas 42–51. Son 400 entrenamientos.
-Además **calibra** las probabilidades (isotónica ajustada solo en validación) y exporta un mapa
-por experimento.
+Entrena un MLP (que ignora el grafo) y tres redes de grafos (GCN, GraphSAGE, GATv2) con el
+bloque A (28 variables) y con A+B (101 variables: A más 71 covariables del Censo 2024 y de la
+MBHT 2017, y dos indicadores de datos faltantes, uno por fuente), con las semillas 42–51. Todas
+las arquitecturas comparten los mismos hiperparámetros, sin ajuste específico.
 
-Resultado de referencia (Linux x86, 2026-10-18; métricas sobre las predicciones *out-of-fold*
-de cada semilla, media ± DE sobre 10 semillas):
+| Modelo (bloque A) | PR-AUC | ROC-AUC | BSS calibrado |
+|---|---|---|---|
+| MLP | 0,211 ± 0,023 | 0,787 ± 0,061 | −0,067 |
+| GraphSAGE | 0,206 ± 0,031 | 0,755 ± 0,048 | −0,080 |
+| GATv2 | 0,127 ± 0,022 | 0,636 ± 0,028 | −0,165 |
+| GCN | 0,122 ± 0,019 | 0,611 ± 0,050 | −0,116 |
 
-| Features | Modelo | PR-AUC | ROC-AUC | Brier raw → calibrado | ECE raw → calibrado |
-|---|---|---|---|---|---|
-| geometría | MLP | **0,214 ± 0,020** | **0,794 ± 0,045** | 0,171 → 0,077 | 0,241 → 0,053 |
-| geometría | SAGE | 0,207 ± 0,033 | 0,757 ± 0,048 | 0,145 → 0,077 | 0,184 → 0,051 |
-| geo + socio | SAGE | 0,191 ± 0,038 | 0,710 ± 0,065 | 0,119 → 0,083 | 0,120 → 0,059 |
-| geo + socio | MLP | 0,186 ± 0,023 | 0,712 ± 0,055 | 0,140 → 0,080 | 0,177 → 0,054 |
-| geo + socio | GAT | 0,130 ± 0,031 | 0,616 ± 0,045 | 0,180 → 0,089 | 0,217 → 0,073 |
-| geometría | GAT | 0,123 ± 0,018 | 0,630 ± 0,032 | 0,179 → 0,084 | 0,240 → 0,061 |
-| geometría | GCN | 0,122 ± 0,020 | 0,610 ± 0,050 | 0,193 → 0,080 | 0,277 → 0,055 |
-| geo + socio | GCN | 0,116 ± 0,026 | 0,592 ± 0,050 | 0,165 → 0,092 | 0,208 → 0,072 |
+`[reproducido el 2026-11-06 en Apple M1; tabla completa con A+B en docs/reference_results/v03_apple_m1/]`
 
-**Tres lecturas:**
-1. **Añadir socioeconomía empeora** (PR-AUC 0,214 → 0,186; ROC-AUC 0,79 → 0,71). Con 217
-   positivos y 168 variables, el bloque socio (espacialmente suave y de 2017) aporta más ruido
-   que señal fuera de muestra. Coincide con que las 94 "candidatas" del SOM original no se
-   recuperan con un modelo predictivo (AUC 0,53).
-2. **La morfología local es la señal**; el MLP sin grafo iguala o supera a GraphSAGE, y GCN /
-   GATv2 fallan (sobre-suavizado y sobreajuste con pocos positivos). El message passing no
-   aporta valor incremental medible en PAC.
-3. **Sin calibrar, las probabilidades no son probabilidades** (ECE 0,18–0,28 por el
-   `pos_weight` balanceado); calibradas, ECE ≈ 0,05. Los mapas usan la versión calibrada.
+Ninguna red supera a la regresión logística de §4, y todas tienen BSS negativo: aunque la
+calibración isotónica deja el error de calibración (ECE) cerca de 0,05, sus probabilidades son
+peores que predecir la prevalencia. **Un ECE bajo no basta** cuando los positivos son escasos.
 
-Reproducción en Apple M1 (2026-10-19), misma batería:
-
-| Features | Modelo | PR-AUC (M1) | ROC-AUC (M1) | PR-AUC (Linux) | ROC-AUC (Linux) |
-|---|---|---|---|---|---|
-| geometría | MLP | 0,211 ± 0,023 | 0,787 ± 0,061 | 0,214 ± 0,020 | 0,794 ± 0,045 |
-| geometría | SAGE | 0,206 ± 0,031 | 0,755 ± 0,048 | 0,207 ± 0,033 | 0,757 ± 0,048 |
-| geo + socio | SAGE | 0,194 ± 0,042 | 0,716 ± 0,066 | 0,191 ± 0,038 | 0,710 ± 0,065 |
-| geo + socio | MLP | 0,192 ± 0,023 | 0,727 ± 0,056 | 0,186 ± 0,023 | 0,712 ± 0,055 |
-| geo + socio | GAT | 0,132 ± 0,030 | 0,622 ± 0,041 | 0,130 ± 0,031 | 0,616 ± 0,045 |
-| geometría | GAT | 0,127 ± 0,022 | 0,636 ± 0,028 | 0,123 ± 0,018 | 0,630 ± 0,032 |
-| geometría | GCN | 0,122 ± 0,019 | 0,611 ± 0,050 | 0,122 ± 0,020 | 0,610 ± 0,050 |
-| geo + socio | GCN | 0,117 ± 0,028 | 0,589 ± 0,048 | 0,116 ± 0,026 | 0,592 ± 0,050 |
-
-Todas las diferencias entre plataformas están por debajo de la DE entre semillas y muy por
-debajo de las diferencias entre modelos: el ranking (MLP ≈ SAGE ≫ GAT ≈ GCN) y el efecto de
-la ablación (la socioeconomía empeora) se replican. Incidente registrado: una primera corrida en
-M1 reutilizó tres archivos de referencia que viajaban en `results/`; por eso las referencias
-viven ahora en `docs/reference_results/` y `results/` nace vacío.
-
-## 6. El mapa de probabilidad y la calibración
+## 6. Comparaciones pareadas: qué diferencias son reales
 
 ```bash
-$PY scripts/fig_03_map.py --experiment geometry__mlp     # o geometry__sage, geometry_socio__mlp…
+make paired
+cat results/paired/paired_comparisons.md
 ```
 
-La batería guardó, para cada tramo, la probabilidad calibrada de cierre que el modelo le asignó
-**cuando ese tramo era test**, promediada sobre 10 semillas, y la desviación entre semillas.
-Es el producto final: un mapa P(cierre | morfología) para el 100 % de la comuna, con su
-incertidumbre (`results/battery/<experimento>_p_closure.gpkg` y `.geojson`).
+Como la semilla fija la partición, en cada semilla todos los modelos se evalúan sobre los mismos
+barrios. Comparar medias sueltas mezcla la variación del modelo con la de la partición; por eso
+cada afirmación se contrasta con las 10 diferencias por semilla: diferencia media, intervalo de
+confianza del 95 % por bootstrap y prueba de Wilcoxon.
 
-- `fig03a`: izquierda, el mapa; los "peines" se iluminan aunque el modelo nunca vio sus
-  etiquetas al predecirlos. Derecha, la incertidumbre, concentrada en los peines del
-  surponiente, donde cada fold dejaba pocos cierres para entrenar.
-- `fig03b`: curva de confiabilidad (tras calibrar, cuando el modelo dice 0,3 cierra ≈ 30 %) y
-  separación de distribuciones entre abiertos y cerrados.
-- `fig03c` y `candidatos_<experimento>.csv`: tramos **abiertos** con mayor P(cierre). En ambas
-  plataformas el top-5 son cinco pasajes `living_street` del surponiente (Los Jazmines, Las
-  Maravillas, Los Geranios, Las Buganvilias, Los Tulipanes) empatados en P = 0,599 porque
-  comparten exactamente el mismo vector de features (misma geometría repetida en serie), con DE
-  entre semillas 0,34; luego tramos de Av. Clotario Blest (P ≈ 0,52–0,54).
+| Comparación (A − B) | ΔPR-AUC [IC 95 %] | ΔROC-AUC [IC 95 %] | Veredicto |
+|---|---|---|---|
+| Logística − MLP | +0,076 [+0,061; +0,092] | +0,084 [+0,053; +0,125] | la logística gana en 10/10 semillas |
+| MLP − GraphSAGE | +0,005 [−0,018; +0,027] | +0,032 [−0,001; +0,064] | sin diferencia demostrable: el grafo no aporta |
+| MLP − tabla de 2 variables | +0,009 [−0,002; +0,019] | −0,018 [−0,049; +0,006] | el MLP no ordena mejor que la tabla |
+| Bloque A − A+B, MLP | +0,006 [−0,016; +0,030] | +0,050 [+0,008; +0,089] | lo socioeconómico baja el ROC-AUC |
+| Bloque A − A+B, GraphSAGE | +0,025 [+0,004; +0,047] | +0,064 [+0,025; +0,094] | lo socioeconómico empeora ambas |
+| GraphSAGE − GCN | +0,084 [+0,059; +0,107] | +0,144 [+0,112; +0,174] | GCN es claramente peor |
 
-**Lectura para el paper.** PR-AUC ≈ 0,20 dice que el mapa no adivina tramo a tramo; ROC-AUC
-0,83 y la calibración lo hacen útil como **priorización**: el decil superior concentra una
-fracción desproporcionada de los cierres. Los ~227 tramos abiertos con P ≥ 0,25 son una
-hipótesis que un levantamiento futuro puede confirmar o refutar: eso hace al estudio predictivo
-en sentido estricto, a diferencia de las "candidatas" descriptivas del SOM original.
+`[reproducido el 2026-11-06 en Apple M1]`
 
-`[reproducido el 2026-10-19 en Apple M1: mismo top-10, P idénticas en los cinco empatados,
-diferencias en la tercera decimal en Clotario Blest]`
+**Cómo leerlo.** Una diferencia está respaldada cuando su intervalo excluye el cero. Con 10
+semillas, el menor *p* posible de Wilcoxon es 0,002, y "no demostrada" no significa "iguales".
 
-## 7. Reproducibilidad: qué es exacto y qué no
+## 7. Las dos cohortes de registro
+
+```bash
+make cohorts
+cat results/cohorts/cohort_analysis.md
+```
+
+La columna `año` es el año en que se registró el cierre. Los cierres caen en dos cohortes que
+siguen a las dos leyes que regulan los cierres en Chile: 2012–2015 (109 cierres, tras la Ley
+20.499 de 2011, que exige una misma vía de acceso y salida) y 2022–2025 (108, tras la Ley 21.411
+de 2022, que admite calles con acceso y salida distintos). Los tramos abiertos llevan el año del
+levantamiento (2025). Si el modelo hubiera aprendido solo la *elegibilidad legal* de la primera
+ley, no debería transferirse a la segunda.
+
+| Entrenado con cierres de | Evaluado en 2012–2015 | Evaluado en 2022–2025 |
+|---|---|---|
+| ambas cohortes | ROC-AUC 0,895 ± 0,017 | 0,847 ± 0,013 |
+| solo 2012–2015 | 0,871 ± 0,011 | **0,807 ± 0,019** |
+| solo 2022–2025 | 0,848 ± 0,030 | **0,800 ± 0,016** |
+
+`[obtenido el 2026-11-06 en Linux x86; la regresión logística es determinista y el M1 coincide en la tercera decimal]`
+
+**Cómo leerlo.** El modelo que solo vio los cierres de la primera ley ordena los de la segunda
+igual de bien que uno entrenado con ellos (diferencia −0,007, IC [−0,021; +0,006]). Ambas cohortes
+comparten el mismo patrón. La primera es algo más típica, con más pasajes sin salida (31 % frente
+a 19 %), como cabe esperar de la primera ley.
+
+## 8. El mapa
+
+```bash
+make figures
+```
+
+`results/baselines/logreg_all_p_closure.gpkg` guarda, para cada tramo, la probabilidad calibrada
+que la regresión logística le asignó **cuando ese tramo era de test**, promediada sobre 10
+semillas, y la desviación entre semillas. Es el único modelo con BSS positivo, por eso es el mapa
+del informe.
+
+- `fig03a_mapa_logreg_all.png`: a la izquierda, el mapa; a la derecha, la incertidumbre entre
+  semillas.
+- `fig03b_calibracion_logreg_all.png`: curva de confiabilidad y separación entre abiertos y
+  cerrados.
+- `fig03c_candidatos_logreg_all.png` y `candidatos_logreg_all.csv`: los tramos **abiertos** con
+  mayor probabilidad. Los primeros son pasajes y senderos como Pasaje 6 Norte, Pasaje 1, Huafo,
+  Anaxágoras, Tongoy y Paseo Grohnert (p ≈ 0,47–0,60). Algunos senderos sin nombre conviene
+  verificarlos en terreno, porque podrían no ser pasajes cerrables.
+
+**Cómo leerlo.** El mapa sirve como **priorización**: el 10 % de tramos con mayor probabilidad
+(279) contiene 83 de los 217 cierres (38 %, 3,8 veces lo que daría un orden al azar). Hay 207
+tramos abiertos con p ≥ 0,25, frente a 96 de los cierres reales: son hipótesis que un
+levantamiento futuro puede confirmar o refutar.
+
+`[reproducido el 2026-11-06 en Apple M1: ROC-AUC 0,871, PR-AUC 0,258 del promedio de semillas; 207 candidatos]`
+
+## 9. Reproducibilidad: qué es exacto y qué no
 
 - **Dentro de una máquina**: bit a bit (tests `test_seed_reproducibility`,
   `test_run_experiment_is_deterministic`).
-- **Entre máquinas** (Linux x86 vs macOS Apple M1, verificado el 2026-10-19): las particiones,
-  el grafo, las features y los tests son idénticos; el entrenamiento difiere en el último
-  decimal por aritmética de coma flotante.
-  Las métricas de ordenamiento (PR-AUC, ROC-AUC) coinciden a la tercera decimal; las que
-  dependen de un umbral (F1, MCC) pueden moverse en la segunda. Por eso el estudio reporta las
-  AUC como métricas principales.
+- **Entre máquinas** (Linux x86 frente a macOS Apple M1): particiones, grafo, variables y tests
+  son idénticos; el entrenamiento de las redes difiere en los últimos decimales por aritmética de
+  coma flotante. Las AUC coinciden a la tercera decimal; las métricas con umbral (F1, MCC) pueden
+  moverse en la segunda. Por eso las AUC son las métricas principales.
+- Las referencias versionadas están en `docs/reference_results/v03_apple_m1/`; `results/` se
+  genera y no se versiona.
 
 ## Limitaciones declaradas
-- Geometrías de los tramos construidas como rectas entre extremos (no hay polilíneas).
-- Covariables de 2017/2024 frente a un levantamiento mayoritariamente de 2025.
-- La columna `año` del levantamiento y su protocolo de campo no están documentados.
-- `condominio` se trata como no-cierre para mantener la definición del estudio original
+
+- La señal depende en parte de la ubicación (distancia al centroide), no solo de la morfología.
+- Las covariables del bloque B (Censo 2024, MBHT 2017) se midieron, para la mayoría de los
+  cierres, después del registro del cierre.
+- Las redes neuronales comparten una receta de entrenamiento sin ajuste por arquitectura.
+- Los tramos son rectas entre extremos (no hay polilíneas).
+- `condominio` se trata como no cierre para mantener la definición del trabajo previo
   (`data.drop_condominio` lo cambia).
