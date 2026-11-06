@@ -6,7 +6,7 @@ GRAPH_VARIANTS := sage_union sage_radius
 export PYTHONHASHSEED := 0
 export CUBLAS_WORKSPACE_CONFIG := :4096:8
 
-.PHONY: help install install-dev test lint data run all graphs compare run-all baselines paired figures clean
+.PHONY: help install install-dev test lint data run all graphs compare run-all baselines paired cohorts figures clean
 
 help:
 	@echo "make install      install package and dependencies"
@@ -19,6 +19,7 @@ help:
 	@echo "make baselines    non-neural baselines, same folds as the battery"
 	@echo "make run-all      full battery (ablation x models x seeds 42-51)"
 	@echo "make paired       paired comparisons over seeds (needs run-all + baselines)"
+	@echo "make cohorts      closures by registration cohort (2012-15 vs 2022-25)"
 	@echo "make figures      figures; requires make run-all first"
 	@echo "make compare      aggregate results/*/summary.json into results/comparison.md"
 	@echo "make clean        remove caches and results"
@@ -59,9 +60,13 @@ baselines:          ## Non-neural baselines under the identical spatial protocol
 paired:             ## Paired per-seed comparisons with bootstrap CI and Wilcoxon test
 	$(PYTHON) scripts/paired_comparison.py --battery results/battery --baselines results/baselines --out results/paired
 
+cohorts:            ## Stratified evaluation and cross-cohort transfer (logistic regression)
+	$(PYTHON) scripts/cohort_analysis.py --out results/cohorts
+
 figures:            ## Steps 2, 3 and 6 of docs/guia_paso_a_paso.md (needs results/battery from run-all)
 	@test -d results/battery || (echo "results/battery missing: run 'make run-all' first" && exit 1)
 	$(PYTHON) scripts/fig_01_graph.py && $(PYTHON) scripts/fig_02_splits.py && $(PYTHON) scripts/fig_03_map.py
+	@test -f results/baselines/logreg_all_p_closure.gpkg && $(PYTHON) scripts/fig_03_map.py --experiment logreg_all --results-dir results/baselines || echo "run make baselines for the logistic-regression map"
 
 compare:
 	$(PYTHON) scripts/compare_results.py --results results --out results/comparison.md

@@ -23,9 +23,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--experiment", default="geometry__mlp")
     ap.add_argument("--top", type=int, default=25)
+    ap.add_argument("--results-dir", type=Path, default=Path("results/battery"),
+                    help="results/battery for the neural models, results/baselines for logreg_all")
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    base = Path("results/battery")
+    base = a.results_dir
     g = gpd.read_file(base / f"{a.experiment}_p_closure.gpkg")
     rel = pd.read_csv(base / f"{a.experiment}_reliability.csv")
     assert {"p_closure", "p_closure_raw", "p_closure_std_seeds", "y"} <= set(g.columns)
@@ -34,9 +36,9 @@ def main() -> None:
     # --- A: probability map + uncertainty
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     g.plot(ax=axes[0], column="p_closure", cmap="magma_r", linewidth=1.0, legend=True,
-           legend_kwds={"shrink": 0.6, "label": "P(cierre) calibrada, fuera de muestra"})
+           legend_kwds={"shrink": 0.6, "label": "puntaje de cierre calibrado, fuera de muestra"})
     g[g.y == 1].plot(ax=axes[0], color="none", edgecolor="#00b4ff", linewidth=0.5)
-    axes[0].set_title(f"{a.experiment}: probabilidad de cierre (contorno celeste = cierre real)")
+    axes[0].set_title(f"{a.experiment}: puntaje de cierre (contorno celeste = cierre real)")
     g.plot(ax=axes[1], column="p_closure_std_seeds", cmap="viridis", linewidth=1.0, legend=True,
            legend_kwds={"shrink": 0.6, "label": "DE entre 10 semillas"})
     axes[1].set_title("Incertidumbre: dónde las 10 semillas discrepan")

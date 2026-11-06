@@ -1,4 +1,8 @@
-"""End-to-end pipeline: raw CSV -> features -> PyG graph -> spatial CV -> results."""
+"""Single-experiment pipeline used by the CLI (``make run``): raw CSV -> features -> graph -> spatial CV.
+
+The full ablation battery (models × feature sets × seeds, calibration, maps) is
+:mod:`rejas_gnn.training.pipeline`; both share :mod:`rejas_gnn.train` for training one fold.
+"""
 from __future__ import annotations
 
 import logging

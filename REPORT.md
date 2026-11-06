@@ -8,8 +8,8 @@
 > **Guía en español, paso a paso, con la lectura de cada resultado:** [`docs/guia_paso_a_paso.md`](docs/guia_paso_a_paso.md)
 
 <p align="center">
-  <img src="docs/figures/fig03a_mapa_geometry__mlp.png" width="92%" alt="Predicted closure score for every street segment of Pedro Aguirre Cerda, with the disagreement across ten random seeds">
-  <br><em>Left: closure score of each street segment, predicted for neighbourhoods the model never saw (MLP, block A). Right: how much ten independent runs disagree. The score ranks segments; it is not a reliable probability (see “What we found”).</em>
+  <img src="docs/figures/fig03a_mapa_logreg_all.png" width="92%" alt="Predicted closure score for every street segment of Pedro Aguirre Cerda, with the disagreement across ten random seeds">
+  <br><em>Left: closure score of each street segment, predicted for neighbourhoods the model never saw (logistic regression, block A, the best model). Right: how much ten independent runs disagree.</em>
 </p>
 
 ## The question
@@ -23,7 +23,7 @@ is whether it is *predictable*:
 **Can we tell which segments get gated from their position in the street network and from the
 characteristics of their surroundings — and how much does each kind of information contribute?**
 
-An earlier study of the same data described the pattern with two exploratory tools (a fractal
+An earlier, unpublished exploratory study of the same data described the pattern with two exploratory tools (a fractal
 density field and a self-organising map of territorial well-being indices). This repository turns
 the question into a falsifiable one: a model that has never seen a neighbourhood has to predict its
 closures, and we measure how well it does.
@@ -218,29 +218,42 @@ Paired differences behind each finding (A − B over the ten seeds; [95 % CI]):
    probabilities are less accurate than predicting the prevalence (7.8 %) for every segment. Only
    the logistic regression (BSS +0.056) and, marginally, the lookup table carry probabilistic
    information. A low ECE alone is not evidence of useful probabilities when positives are rare.
+6. **Both registration cohorts follow the same pattern.** The `año` column is the year a closure
+   was registered, and closures fall into two cohorts that follow the two laws regulating street
+   closures: 2012–2015 (109, after Ley 20.499 of 2011, which requires a single access) and
+   2022–2025 (108, after Ley 21.411 of 2022, which also allows streets with two accesses). If the
+   model had learned the *legal eligibility* of the first law, it would not transfer to the second.
+   It does: a logistic regression trained only on 2012–2015 closures ranks 2022–2025 closures
+   (ROC-AUC 0.807) as well as one trained on 2022–2025 closures themselves (0.800; paired
+   difference −0.007, 95 % CI [−0.020, +0.006]). Trained on both, it reaches ROC-AUC 0.90 on the
+   first cohort and 0.85 on the second (`make cohorts`). The first cohort is somewhat more typical,
+   with more dead ends (31 % against 19 %), as the first law would predict, but the shared pattern
+   dominates.
 
 <p align="center">
-  <img src="docs/figures/fig03b_calibracion_geometry__mlp.png" width="88%" alt="Reliability curve after calibration and distribution of predicted probability for open and gated segments">
+  <img src="docs/figures/fig03b_calibracion_logreg_all.png" width="88%" alt="Reliability curve after calibration and distribution of predicted probability for open and gated segments">
 </p>
 
 ## The map, and what it is for
 
-For every segment, the pipeline stores the calibrated score predicted when that segment was in the
-test set, averaged over the ten seeds, together with the disagreement between seeds. The map shown
-comes from the MLP; given finding 5 it should be read as a **ranking**, not as probabilities, and a
-map from the logistic regression (the best model) is pending. That is
-the figure at the top of this page, delivered as GeoPackage and GeoJSON
-(`results/battery/<experiment>_p_closure.{gpkg,geojson}` after `make run-all`).
+For every segment, the pipeline stores the calibrated probability predicted when that segment was
+in the test set, averaged over the ten seeds, together with the disagreement between seeds. The map
+at the top of this page comes from the logistic regression, the only model whose probabilities beat
+the base rate (finding 5); it is delivered as a GeoPackage
+(`results/baselines/logreg_all_p_closure.gpkg` after `make baselines`). As a ranking it is useful:
+the top decile of segments (279) contains 83 of the 217 closures (38 %, 3.8 times what a random
+ordering would give).
 
 The most useful reading is the list of **open segments the model believes should be gated**:
 
 <p align="center">
-  <img src="docs/figures/fig03c_candidatos_geometry__mlp.png" width="62%" alt="Open segments with the highest predicted probability of closure, over the real closures">
+  <img src="docs/figures/fig03c_candidatos_logreg_all.png" width="62%" alt="Open segments with the highest predicted probability of closure, over the real closures">
 </p>
 
-The top candidates are five living-street alleys in the south-west (Los Jazmines, Las Maravillas,
-Los Geranios, Las Buganvilias, Los Tulipanes), tied at *p* = 0.60 because they share exactly the same
-geometry, followed by segments of Avenida Clotario Blest. About 227 open segments have *p* ≥ 0.25.
+The top candidates are living-street alleys and footways such as Pasaje 6 Norte, Pasaje 1, Huafo,
+Anaxágoras, Tongoy and Paseo Grohnert (*p* ≈ 0.47–0.60); several unnamed footways appear too and
+should be checked against the field, since some may not be alleys that can be gated. 207 open
+segments have *p* ≥ 0.25, against 96 of the 217 real closures.
 These are hypotheses that a future survey can confirm or refute, which is what makes the study
 predictive in the strict sense. Because the model ranks rather than predicts segment by segment,
 the candidate list is a prioritisation for fieldwork, not a forecast.
@@ -264,15 +277,19 @@ Requires Python ≥ 3.10; CPU is enough (the full battery takes 20–40 min on a
 git clone https://github.com/gdosramos/rejas-gnn.git && cd rejas-gnn
 conda create -n rejas-gnn python=3.11 -y && conda activate rejas-gnn
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-python -m pip install -e ".[dev]"
-python -m pytest                      # 39 tests: graph, no-leakage features, buffer, determinism
+python -m pip install -r requirements-lock.txt     # exact versions of the reference run
+python -m pip install -e ".[dev]" --no-deps
+python -m pytest                      # 42 tests: graph, no-leakage features, buffer, determinism, calibration
 ```
 
 | Command | What it does |
 |---|---|
-| `make figures` | regenerates every figure in this README (steps 2, 3 and 6 of the guide) |
+| `make baselines` | lookup table and logistic regressions, same folds and seeds, map of the best model → `results/baselines/` |
+| `make run-all` | the full battery: ablation A/B × 4 neural models × seeds 42–51, calibrated maps → `results/battery/` |
+| `make paired` | paired comparisons with bootstrap CI and Wilcoxon test → `results/paired/` |
+| `make cohorts` | evaluation and transfer across the two registration cohorts → `results/cohorts/` |
+| `make figures` | regenerates every figure in this report (after `run-all` and `baselines`) |
 | `make run MODEL=sage` | one model, 5 seeds × 5 spatial folds → `results/sage_line_pac/` |
-| `make run-all` | the full battery: ablation A/B × 4 models × seeds 42–51, calibrated maps, `results/battery/battery_results.md` |
 | `make test` · `make lint` | pytest · ruff + mypy |
 
 Any parameter can be overridden without editing files, e.g.
@@ -291,35 +308,44 @@ headline metrics.
 
 ```
 configs/        one YAML per experiment; every parameter lives here, nothing is hard-coded
-data/raw/       pac.csv — the field survey (2 790 segments)            [versioned]
-data/external/  census 2024 + MBHT 2017 covariates per segment         [versioned]
+data/raw/       pac.csv — the field survey (2 790 segments, with registration year)   [versioned]
+data/external/  census 2024 + MBHT 2017 covariates per segment                        [versioned]
 src/rejas_gnn/
-  data/graph_builder.py   geometries → primal graph → line graph, 28 topological/geometric features, feature sets A/B
-  data/splits.py          spatial block k-fold with buffer
-  models/gnn_architectures.py   GCN · GraphSAGE · GATv2 ;  models/baselines.py  MLP · logistic
-  train.py                full-batch training, early stopping, repeated spatial CV
-  training/pipeline.py    the battery: ablation × models × seeds, calibration, map export
-  evaluation/metrics_and_calibration.py   PR/ROC-AUC, F1, MCC, Brier, ECE, isotonic, GeoPackage/GeoJSON
-scripts/        run_battery.py · fig_01_graph.py · fig_02_splits.py · fig_03_map.py · compare_results.py
-tests/          39 pytest tests
-docs/           guia_paso_a_paso.md (ES) · README_technical_v0.1.md · spatial_cv.md · figures/ · reference_results/{battery_linux_x86, battery_apple_m1}
+  data/graph_builder.py     geometries → primal graph → line graph, 28 features, feature sets A/B
+  data/features.py          feature matrix, imputation, one missingness flag per source
+  data/splits.py            spatial block k-fold with buffer
+  models/                   baselines.py (MLP, logistic) · gnn_architectures.py (GCN, GraphSAGE, GATv2)
+  metrics.py                ranking metrics, F1-optimal threshold, Moran's I
+  train.py                  training of one fold: full batch, weighted loss, early stopping
+  pipeline.py               one experiment from the CLI (`make run`)
+  training/pipeline.py      the battery: ablation × models × seeds, calibration, maps (`make run-all`)
+  evaluation/metrics_and_calibration.py   Brier, BSS, ECE, isotonic calibration, map export
+scripts/
+  run_battery.py · run_baselines.py · paired_comparison.py · cohort_analysis.py   the analyses
+  fig_01_graph.py · fig_02_splits.py · fig_03_map.py                              the figures
+tests/          42 pytest tests
+docs/
+  guia_paso_a_paso.md       Spanish step-by-step guide
+  spatial_cv.md             why spatial block CV with buffers
+  figures/                  figures of this report
+  reference_results/v03_apple_m1/   versioned reference results of v0.3
+  archive/v0.1-v0.2/        superseded results and documents, kept for traceability
 results/        generated, git-ignored
 ```
 
 ## Limitations and next steps
 
 * Segment geometries are straight lines between endpoints; real polylines would refine lengths and maps.
-* **The label mixes temporal cohorts.** All open segments carry `año` = 2025, while closures are
-  dated mostly 2012–2015 (109) and 2022–2024 (97). The two cohorts follow the two Chilean laws that
-  regulate street closures (Ley 20.499 of 2011, which requires a single access, and Ley 21.411 of
-  2022, which extends closures to streets with two accesses), and the share of dead ends differs
-  between them (31 % vs 19 %). Whether the closures come from municipal permit records or from
-  field observation is being confirmed with the data provider; until then the model may be learning
-  *legal eligibility* as much as residents' behaviour, and results stratified by cohort are pending.
+* **Registration dates.** `año` is the year a closure was registered, not necessarily the year it
+  was built, and open segments carry the survey year (2025). Finding 6 shows that both cohorts share
+  one pattern; it does not remove the timing mismatch with the covariates of block B.
+* **Location.** Part of the signal comes from the distance to the comuna's centroid, a proxy for
+  location rather than morphology.
+* **Hyper-parameters.** Neural architectures share one untuned recipe; tuning could reorder them,
+  though it is unlikely to close the gap with the logistic regression.
 * Condominium gates are treated as "not gated" to match the original study (`data.drop_condominio` switches this).
-* Next: inductive transfer to La Florida (the pipeline supports it with one config file), an
-  ablation by feature block (network / geometry / road class) to attribute the signal, and a
-  follow-up survey of the 227 candidates.
+* Next: inductive transfer to La Florida (the pipeline supports it with one config file) and a
+  follow-up survey of the 207 candidates.
 
 ## Citation
 
