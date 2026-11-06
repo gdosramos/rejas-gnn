@@ -1,15 +1,15 @@
-# Why do neighbours gate their streets? Predicting residential closures in Pedro Aguirre Cerda from the shape of the street network
+# Which streets get gated? Predicting residential closures in Pedro Aguirre Cerda from street-network morphology under spatial validation
 
 [![CI](https://github.com/gdosramos/rejas-gnn/actions/workflows/ci.yml/badge.svg)](https://github.com/gdosramos/rejas-gnn/actions)
-[![version](https://img.shields.io/badge/version-v0.2.0-blue)](https://github.com/gdosramos/rejas-gnn/releases)
+[![version](https://img.shields.io/badge/version-v0.3.0--dev-blue)](https://github.com/gdosramos/rejas-gnn/releases)
 [![python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](#reproduce-it)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Guía en español, paso a paso, con la lectura de cada resultado:** [`docs/guia_paso_a_paso.md`](docs/guia_paso_a_paso.md)
 
 <p align="center">
-  <img src="docs/figures/fig03a_mapa_geometry__mlp.png" width="92%" alt="Calibrated probability of closure for every street segment of Pedro Aguirre Cerda, with the uncertainty across ten random seeds">
-  <br><em>Left: probability that a street segment is gated, predicted for neighbourhoods the model never saw. Right: how much ten independent runs disagree.</em>
+  <img src="docs/figures/fig03a_mapa_geometry__mlp.png" width="92%" alt="Predicted closure score for every street segment of Pedro Aguirre Cerda, with the disagreement across ten random seeds">
+  <br><em>Left: closure score of each street segment, predicted for neighbourhoods the model never saw (MLP, block A). Right: how much ten independent runs disagree. The score ranks segments; it is not a reliable probability (see “What we found”).</em>
 </p>
 
 ## The question
@@ -62,7 +62,7 @@ experiment of the study:
 | Block | What it contains | Count |
 |---|---|---|
 | **A · Topology & geometry** | position in the network (degree, betweenness, closeness, clustering, bridge, articulation point, **dead end**), length, orientation, distance to the centroid, OSM road class | 28 |
-| **B · + Zonal socio-economics** | A plus 49 ratios from the 2024 Census and 20 territorial well-being indices (MBHT 2017), attached to each segment from the census blocks within 150 m | 168 |
+| **B · + Zonal socio-economics** | A plus 50 Census 2024 variables and 21 MBHT 2017 variables (each source includes the number of census blocks averaged), attached from the census blocks within 150 m, plus 2 missingness flags | 101 |
 
 Block A alone already tells a lot:
 
@@ -142,51 +142,82 @@ neighbourhood, which is what the question asks.
 
 ## The experiment
 
-* **Models.** A multilayer perceptron that ignores the graph (the control), and three graph neural
-  networks that use it: GCN, GraphSAGE and GATv2. A logistic regression is available as a linear floor.
-* **Ablation.** Every model is trained twice: with block A only, and with blocks A + B.
-* **Repetition.** Ten random seeds (42–51), each producing a different block partition, model
-  initialisation and sampling; 400 training runs in total.
-* **Loss and optimisation.** Weighted binary cross-entropy (positives are 1 in 12), Adam, early
-  stopping on validation PR-AUC.
-* **Metrics.** PR-AUC (the honest metric for 7.8 % positives; chance = 0.078), ROC-AUC, F1 and MCC
-  at the validation-chosen threshold, Brier score and expected calibration error (ECE).
-  Probabilities are **calibrated by isotonic regression fitted on the validation blocks only**.
+* **Models.** Two non-neural baselines: a lookup table P(gated | OSM road class, dead end) with
+  12 cells, and an L2 logistic regression. A multilayer perceptron that ignores the graph, and three
+  graph neural networks that use it: GCN, GraphSAGE and GATv2.
+* **Ablation.** Every neural model is trained twice: with block A only, and with blocks A + B. The
+  logistic regression is also refitted without road class and without distance to the centroid,
+  to see where its signal comes from.
+* **Repetition.** Ten random seeds (42–51). The seed fixes the spatial block partition, so all
+  models are evaluated on exactly the same held-out neighbourhoods in each seed.
+* **Loss and optimisation (neural models).** Weighted binary cross-entropy (positives are 1 in 12),
+  Adam, early stopping on validation PR-AUC. The same hyper-parameters are used for every
+  architecture; no architecture-specific tuning was done.
+* **Metrics.** PR-AUC (the honest metric for 7.8 % positives; chance = 0.078) and ROC-AUC for
+  ranking; F1 and MCC at a threshold chosen on validation; for probabilities, Brier score, its
+  **skill score (BSS) against predicting the prevalence for every segment**, and ECE. Probabilities
+  are calibrated by isotonic regression fitted on the validation blocks only.
+* **Comparisons.** Every claim “A is better than B” is tested on the ten per-seed differences
+  (same partitions): mean difference, 95 % bootstrap CI and exact Wilcoxon signed-rank test
+  (`make paired`). With ten seeds the smallest attainable p-value is 0.002, and a non-significant
+  difference means “not shown”, not “equal”.
 
 ## What we found
 
-Results on the test blocks, mean ± SD over the ten seeds (Apple M1 run; the Linux x86 run in
-[`docs/reference_results/`](docs/reference_results/) differs in the third decimal):
+Results on the test blocks, mean ± SD over the ten seeds, block A features (Apple M1 run; full
+tables, including block A + B, in [`docs/reference_results/v03_apple_m1/`](docs/reference_results/v03_apple_m1/)):
 
-| Features | Model | PR-AUC | ROC-AUC | F1 | Brier raw → calibrated | ECE raw → calibrated |
-|---|---|---|---|---|---|---|
-| A · geometry | **MLP** | **0.211 ± 0.023** | **0.787 ± 0.061** | 0.306 ± 0.053 | 0.172 → 0.077 | 0.242 → 0.053 |
-| A · geometry | GraphSAGE | 0.206 ± 0.031 | 0.755 ± 0.048 | 0.287 ± 0.054 | 0.145 → 0.077 | 0.184 → 0.052 |
-| A + B | GraphSAGE | 0.194 ± 0.042 | 0.716 ± 0.066 | 0.254 ± 0.068 | 0.118 → 0.082 | 0.119 → 0.060 |
-| A + B | MLP | 0.192 ± 0.023 | 0.727 ± 0.056 | 0.272 ± 0.058 | 0.137 → 0.079 | 0.170 → 0.053 |
-| A + B | GATv2 | 0.132 ± 0.030 | 0.622 ± 0.041 | 0.172 ± 0.045 | 0.176 → 0.087 | 0.209 → 0.071 |
-| A · geometry | GATv2 | 0.127 ± 0.022 | 0.636 ± 0.028 | 0.191 ± 0.024 | 0.181 → 0.084 | 0.239 → 0.060 |
-| A · geometry | GCN | 0.122 ± 0.019 | 0.611 ± 0.050 | 0.178 ± 0.018 | 0.193 → 0.080 | 0.277 → 0.056 |
-| A + B | GCN | 0.117 ± 0.028 | 0.589 ± 0.048 | 0.169 ± 0.029 | 0.165 → 0.091 | 0.208 → 0.073 |
+| Model | Features | PR-AUC | ROC-AUC | BSS (calibrated) |
+|---|---|---|---|---|
+| **Logistic regression** | 28 | **0.286 ± 0.024** | **0.871 ± 0.012** | **+0.056** |
+| Logistic regression, no distance to centroid | 27 | 0.218 ± 0.018 | 0.822 ± 0.016 | −0.002 |
+| MLP | 28 | 0.211 ± 0.023 | 0.787 ± 0.061 | −0.067 |
+| GraphSAGE | 28 | 0.206 ± 0.031 | 0.755 ± 0.048 | −0.080 |
+| Lookup table: road class × dead end | 2 | 0.202 ± 0.025 | 0.805 ± 0.018 | +0.011 |
+| Logistic regression, no road class | 18 | 0.197 ± 0.018 | 0.772 ± 0.013 | −0.003 |
+| GATv2 | 28 | 0.127 ± 0.022 | 0.636 ± 0.028 | −0.165 |
+| GCN | 28 | 0.122 ± 0.019 | 0.611 ± 0.050 | −0.116 |
 
-Three findings, each the opposite of what one might expect:
+Paired differences behind each finding (A − B over the ten seeds; [95 % CI]):
 
-1. **The shape of the network is the signal.** Twenty-eight topological and geometric attributes,
-   with no socio-economic information at all, rank a gated segment above an open one 79 % of the
-   time in a neighbourhood the model never saw (PR-AUC 2.7× chance).
-2. **Adding zonal socio-economics makes it worse**, not better (PR-AUC 0.21 → 0.19, ROC-AUC
-   0.79 → 0.73 for the MLP). With 217 positives and 168 variables, the spatially smooth 2017 indices
-   add noise rather than out-of-sample signal. This is consistent with a cross-check we ran: the
-   94 "candidate" blocks of the earlier self-organising-map study are not recovered by any
-   predictive model (AUC 0.53, i.e. chance).
-3. **Looking at the neighbours does not help once leakage is removed.** The MLP, which ignores the
-   graph, matches or beats GraphSAGE; GCN and GATv2 fail outright (over-smoothing and overfitting
-   with few positives). The graph structure that makes closures *look* contagious is already encoded
-   in each segment's own attributes — above all, whether it is a dead end.
+| Comparison | ΔPR-AUC | ΔROC-AUC | ΔBSS |
+|---|---|---|---|
+| Logistic regression − MLP | +0.076 [+0.061, +0.092] | +0.084 [+0.053, +0.125] | +0.124 [+0.084, +0.172] |
+| MLP − GraphSAGE | +0.005 [−0.018, +0.027] | +0.032 [−0.001, +0.064] | +0.013 [−0.031, +0.055] |
+| MLP − lookup table | +0.009 [−0.002, +0.019] | −0.018 [−0.049, +0.006] | −0.078 [−0.142, −0.020] |
+| Block A − block A + B, MLP | +0.006 [−0.016, +0.030] | +0.050 [+0.008, +0.089] | +0.015 [−0.023, +0.059] |
+| Block A − block A + B, GraphSAGE | +0.025 [+0.004, +0.047] | +0.064 [+0.025, +0.094] | +0.046 [−0.023, +0.118] |
+| GraphSAGE − GCN | +0.084 [+0.059, +0.107] | +0.144 [+0.112, +0.174] | +0.036 [−0.001, +0.072] |
+| Logistic: all − no road class | +0.089 [+0.079, +0.100] | +0.099 [+0.093, +0.105] | +0.059 [+0.030, +0.091] |
+| Logistic: all − no distance to centroid | +0.068 [+0.061, +0.075] | +0.049 [+0.045, +0.053] | +0.059 [+0.033, +0.079] |
 
-A fourth, methodological finding: **raw model outputs are not probabilities.** With class weighting,
-expected calibration error is 0.18–0.28; after isotonic calibration it drops to ≈ 0.05, so the maps
-below can be read as "this segment is gated with probability *p*".
+1. **Closures are predictable in unseen neighbourhoods, and a linear model does it best.** A
+   logistic regression on 28 morphological attributes reaches PR-AUC 0.29 (3.7× chance) and ROC-AUC
+   0.87, and beats the MLP and every graph network on ranking and on probability quality in all ten
+   partitions.
+2. **The signal is concentrated in a few variables.** Two of them, OSM road class and whether the
+   segment is a dead end, already give ROC-AUC 0.81 as a 12-cell table, which the MLP does not beat
+   on ranking and beats it on probabilities. Removing road class or the distance to the comuna's
+   centroid costs the logistic model 0.07–0.09 PR-AUC each. The second result means that part of the
+   signal is *where* a segment is, not only *what shape* it has; with spatial block validation this
+   is still out-of-sample, but it is not a morphological effect.
+3. **Using the graph adds nothing that can be demonstrated.** GraphSAGE is statistically
+   indistinguishable from the MLP that ignores the graph, and GCN and GATv2 are clearly worse
+   (ΔPR-AUC ≈ 0.08 against GraphSAGE). The cause of their failure is not established here: all
+   architectures share one untuned training recipe. Residual spatial autocorrelation (Moran's *I*
+   ≈ 0.22 against 0.17 for the label) shows that the spatial structure of closures is not captured
+   by any model either.
+4. **Zonal socio-economic covariates do not help.** Adding census 2024 and MBHT 2017 indices never
+   improves any metric and consistently lowers ROC-AUC (by 0.05 for the MLP and 0.06 for
+   GraphSAGE). The result holds after removing the 69 redundant missingness flags of v0.2. It is
+   consistent with the timing problem described above (most covariates postdate the closures) and
+   with the earlier study's SOM candidate blocks not being recovered by any predictive model
+   (AUC 0.53).
+5. **The neural models' probabilities should not be read as risks.** Isotonic calibration lowers
+   ECE to ≈ 0.05, but every neural model has a negative Brier skill score: its calibrated
+   probabilities are less accurate than predicting the prevalence (7.8 %) for every segment. Only
+   the logistic regression (BSS +0.056) and, marginally, the lookup table carry probabilistic
+   information. A low ECE alone is not evidence of useful probabilities when positives are rare.
 
 <p align="center">
   <img src="docs/figures/fig03b_calibracion_geometry__mlp.png" width="88%" alt="Reliability curve after calibration and distribution of predicted probability for open and gated segments">
@@ -194,8 +225,10 @@ below can be read as "this segment is gated with probability *p*".
 
 ## The map, and what it is for
 
-For every segment, the pipeline stores the calibrated probability predicted when that segment was
-in the test set, averaged over the ten seeds, together with the disagreement between seeds. That is
+For every segment, the pipeline stores the calibrated score predicted when that segment was in the
+test set, averaged over the ten seeds, together with the disagreement between seeds. The map shown
+comes from the MLP; given finding 5 it should be read as a **ranking**, not as probabilities, and a
+map from the logistic regression (the best model) is pending. That is
 the figure at the top of this page, delivered as GeoPackage and GeoJSON
 (`results/battery/<experiment>_p_closure.{gpkg,geojson}` after `make run-all`).
 
@@ -209,8 +242,8 @@ The top candidates are five living-street alleys in the south-west (Los Jazmines
 Los Geranios, Las Buganvilias, Los Tulipanes), tied at *p* = 0.60 because they share exactly the same
 geometry, followed by segments of Avenida Clotario Blest. About 227 open segments have *p* ≥ 0.25.
 These are hypotheses that a future survey can confirm or refute, which is what makes the study
-predictive in the strict sense. The map does not guess segment by segment (PR-AUC 0.20); it
-prioritises: the top decile concentrates a disproportionate share of the closures.
+predictive in the strict sense. Because the model ranks rather than predicts segment by segment,
+the candidate list is a prioritisation for fieldwork, not a forecast.
 
 ## Replication of the original study
 
