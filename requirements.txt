@@ -1,4 +1,4 @@
-# Core (pin to the versions used for the reference run; see README §Reproducibility)
+# Minimum versions. For the exact versions of the reference run use requirements-lock.txt.
 numpy>=1.26
 pandas>=2.1
 scipy>=1.11

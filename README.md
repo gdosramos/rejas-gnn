@@ -42,7 +42,7 @@ see [`REPORT.md`](REPORT.md) for the zonal socio-economic block B and the full a
 ```bash
 git clone https://github.com/gdosramos/rejas-gnn.git && cd rejas-gnn
 conda create -n rejas-gnn python=3.11 -y && conda activate rejas-gnn
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements-lock.txt   # exact versions of the reference run
 python -m pip install -e ".[dev]" --no-deps
 python -m pytest                       # graph, no-leakage features, buffer, determinism, calibration
@@ -53,9 +53,12 @@ make cohorts                           # the two registration cohorts → result
 make figures                           # after run-all → results/figures/
 ```
 
-Every run writes its configuration, library versions and metrics to JSON; results are
-bit-for-bit reproducible on one machine and agree to the third decimal across machines
-(Linux x86 and Apple M1 references in [`docs/reference_results/`](docs/reference_results/)).
+Every run writes its configuration, library versions and metrics to JSON. Results are
+bit-for-bit reproducible on one machine; across machines, ranking metrics agree to the third
+decimal (checked between Apple M1 and Linux x86). The versioned reference run is in
+[`docs/reference_results/v03_apple_m1/`](docs/reference_results/v03_apple_m1/).
+
+A Spanish PDF version of the report is in [`docs/informe/`](docs/informe/).
 
 ## Where things are
 
@@ -64,11 +67,12 @@ bit-for-bit reproducible on one machine and agree to the third decimal across ma
 | [`REPORT.md`](REPORT.md) | the narrative report: question, data, validation design, findings |
 | [`docs/guia_paso_a_paso.md`](docs/guia_paso_a_paso.md) | step-by-step guide in Spanish, with the reading of every output |
 | [`docs/spatial_cv.md`](docs/spatial_cv.md) | why spatial block CV with buffers |
+| [`docs/informe/`](docs/informe/) | the report in Spanish, as PDF (LaTeX source included) |
 | `configs/` | one YAML per experiment; every parameter lives here |
 | `src/rejas_gnn/data/` | graph construction, features, spatial splits |
 | `src/rejas_gnn/models/` | MLP, logistic, GCN, GraphSAGE, GATv2 |
 | `src/rejas_gnn/training/pipeline.py` | the battery: ablation × models × seeds, calibration, maps |
-| `scripts/run_baselines.py` | non-neural baselines under the identical protocol |
+| `scripts/` | baselines, battery, paired comparisons, cohort analysis and figures |
 | `data/raw/pac.csv` | the field survey (versioned) |
 | `data/external/` | Census 2024 and MBHT 2017 covariates per segment (versioned) |
 

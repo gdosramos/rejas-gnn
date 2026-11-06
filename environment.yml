@@ -1,21 +1,10 @@
+# Conda environment for rejas-gnn. Exact package versions live in requirements-lock.txt
+# (the reference run); this file only provides Python and pip.
+#   conda env create -f environment.yml && conda activate rejas-gnn
+#   python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+#   python -m pip install -r requirements-lock.txt && python -m pip install -e ".[dev]" --no-deps
 name: rejas-gnn
-channels: [conda-forge, pytorch, pyg]
+channels: [conda-forge]
 dependencies:
   - python=3.11
-  - numpy=1.26.4
-  - pandas=2.2.2
-  - scipy=1.13.1
-  - scikit-learn=1.5.1
-  - networkx=3.3
-  - geopandas=1.0.1
-  - shapely=2.0.4
-  - pyproj=3.6.1
-  - pyogrio=0.9.0
-  - pyyaml=6.0.1
-  - tabulate=0.9.0
-  - pytorch=2.3.1
-  - cpuonly
-  - pyg=2.5.3
-  - pytest=8.2.2
-  - ruff
   - pip

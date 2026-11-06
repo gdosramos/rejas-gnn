@@ -1,9 +1,9 @@
 cff-version: 1.2.0
-title: "Rejas-GNN: graph neural networks for residential street closures in Pedro Aguirre Cerda"
-version: 0.3.0.dev0
+title: "Rejas-GNN: predicting residential street closures in Pedro Aguirre Cerda under spatial validation"
+version: 0.3.0
 type: software
 license: MIT
-date-released: "2026-10-18"
+date-released: "2026-11-06"
 authors:
   - family-names: "Ramos"
     given-names: "Gerardo"

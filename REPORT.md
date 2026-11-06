@@ -1,7 +1,7 @@
 # Which streets get gated? Predicting residential closures in Pedro Aguirre Cerda from street-network morphology under spatial validation
 
 [![CI](https://github.com/gdosramos/rejas-gnn/actions/workflows/ci.yml/badge.svg)](https://github.com/gdosramos/rejas-gnn/actions)
-[![version](https://img.shields.io/badge/version-v0.3.0--dev-blue)](https://github.com/gdosramos/rejas-gnn/releases)
+[![version](https://img.shields.io/badge/version-v0.3.0-blue)](https://github.com/gdosramos/rejas-gnn/releases)
 [![python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)](#reproduce-it)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -9,7 +9,7 @@
 
 <p align="center">
   <img src="docs/figures/fig03a_mapa_logreg_all.png" width="92%" alt="Predicted closure score for every street segment of Pedro Aguirre Cerda, with the disagreement across ten random seeds">
-  <br><em>Left: closure score of each street segment, predicted for neighbourhoods the model never saw (logistic regression, block A, the best model). Right: how much ten independent runs disagree.</em>
+  <br><em>Left: calibrated probability of closure of each street segment, predicted for neighbourhoods the model never saw (logistic regression, block A, the best model). Right: how much ten independent runs disagree.</em>
 </p>
 
 ## The question
@@ -23,8 +23,8 @@ is whether it is *predictable*:
 **Can we tell which segments get gated from their position in the street network and from the
 characteristics of their surroundings — and how much does each kind of information contribute?**
 
-An earlier, unpublished exploratory study of the same data described the pattern with two exploratory tools (a fractal
-density field and a self-organising map of territorial well-being indices). This repository turns
+An earlier, unpublished exploratory study of the same data described the pattern with two tools
+(a fractal density field and a self-organising map of territorial well-being indices). This repository turns
 the question into a falsifiable one: a model that has never seen a neighbourhood has to predict its
 closures, and we measure how well it does.
 
@@ -111,8 +111,8 @@ features (28 + 71 covariates + 2 flags). Up to v0.2 one flag per column was adde
 69 near-identical columns and a 168-feature block; the ablation was re-run without them.
 
 Three honest caveats about this block. Its **timing does not match the target**: the `año`
-column of the survey dates 109 of the 217 closures to 2012–2015 and 97 to 2022–2024, and only 11
-to 2025, so for most closures the census 2024 and even the MBHT 2017 are measured *after* the gate
+column, the year each closure was registered, places 109 of the 217 closures in 2012–2015 and 108
+in 2022–2025, so for most closures the census 2024 and even the MBHT 2017 are measured *after* the gate
 was installed. It is **zonal, not segment-level**: it describes the block, not
 the alley. And for the security indices there is a possible **reverse causality**: a gated alley may
 itself change recorded crime. These are exactly the reasons the ablation is designed as A (without)
@@ -276,7 +276,7 @@ Requires Python ≥ 3.10; CPU is enough (the full battery takes 20–40 min on a
 ```bash
 git clone https://github.com/gdosramos/rejas-gnn.git && cd rejas-gnn
 conda create -n rejas-gnn python=3.11 -y && conda activate rejas-gnn
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements-lock.txt     # exact versions of the reference run
 python -m pip install -e ".[dev]" --no-deps
 python -m pytest                      # 42 tests: graph, no-leakage features, buffer, determinism, calibration
@@ -326,6 +326,7 @@ scripts/
 tests/          42 pytest tests
 docs/
   guia_paso_a_paso.md       Spanish step-by-step guide
+  informe/                  the report in Spanish, PDF and LaTeX source
   spatial_cv.md             why spatial block CV with buffers
   figures/                  figures of this report
   reference_results/v03_apple_m1/   versioned reference results of v0.3
@@ -352,9 +353,9 @@ results/        generated, git-ignored
 ```bibtex
 @software{rejas_gnn_2026,
   author  = {Ramos, Gerardo},
-  title   = {Rejas-GNN: predicting residential street closures in Pedro Aguirre Cerda from street-network morphology},
+  title   = {Rejas-GNN: predicting residential street closures in Pedro Aguirre Cerda under spatial validation},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.3.0},
   url     = {https://github.com/gdosramos/rejas-gnn}
 }
 ```
