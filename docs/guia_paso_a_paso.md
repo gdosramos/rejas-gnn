@@ -213,14 +213,14 @@ ley, no debería transferirse a la segunda.
 
 | Entrenado con cierres de | Evaluado en 2012–2015 | Evaluado en 2022–2025 |
 |---|---|---|
-| ambas cohortes | ROC-AUC 0,895 ± 0,017 | 0,847 ± 0,013 |
+| ambas cohortes | ROC-AUC 0,894 ± 0,017 | 0,847 ± 0,013 |
 | solo 2012–2015 | 0,871 ± 0,011 | **0,807 ± 0,019** |
 | solo 2022–2025 | 0,848 ± 0,030 | **0,800 ± 0,016** |
 
-`[obtenido el 2026-11-06 en Linux x86; la regresión logística es determinista y el M1 coincide en la tercera decimal]`
+`[reproducido el 2026-11-06 en Apple M1]`
 
 **Cómo leerlo.** El modelo que solo vio los cierres de la primera ley ordena los de la segunda
-igual de bien que uno entrenado con ellos (diferencia −0,007, IC [−0,021; +0,006]). Ambas cohortes
+igual de bien que uno entrenado con ellos (diferencia −0,007, IC [−0,020; +0,006]). Ambas cohortes
 comparten el mismo patrón. La primera es algo más típica, con más pasajes sin salida (31 % frente
 a 19 %), como cabe esperar de la primera ley.
 
@@ -259,7 +259,8 @@ levantamiento futuro puede confirmar o refutar.
   son idénticos; el entrenamiento de las redes difiere en los últimos decimales por aritmética de
   coma flotante. Las AUC coinciden a la tercera decimal; las métricas con umbral (F1, MCC) pueden
   moverse en la segunda. Por eso las AUC son las métricas principales.
-- Las referencias versionadas están en `docs/reference_results/v03_apple_m1/`; `results/` se
+- Las referencias versionadas están en `docs/reference_results/v03_apple_m1/`; las de versiones
+  anteriores, con la explicación de por qué difieren, en `docs/archive/v0.1-v0.2/`. `results/` se
   genera y no se versiona.
 
 ## Limitaciones declaradas

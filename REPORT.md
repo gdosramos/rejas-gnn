@@ -225,7 +225,7 @@ Paired differences behind each finding (A − B over the ten seeds; [95 % CI]):
    model had learned the *legal eligibility* of the first law, it would not transfer to the second.
    It does: a logistic regression trained only on 2012–2015 closures ranks 2022–2025 closures
    (ROC-AUC 0.807) as well as one trained on 2022–2025 closures themselves (0.800; paired
-   difference −0.007, 95 % CI [−0.021, +0.006]). Trained on both, it reaches ROC-AUC 0.90 on the
+   difference −0.007, 95 % CI [−0.020, +0.006]). Trained on both, it reaches ROC-AUC 0.90 on the
    first cohort and 0.85 on the second (`make cohorts`). The first cohort is somewhat more typical,
    with more dead ends (31 % against 19 %), as the first law would predict, but the shared pattern
    dominates.
@@ -308,18 +308,28 @@ headline metrics.
 
 ```
 configs/        one YAML per experiment; every parameter lives here, nothing is hard-coded
-data/raw/       pac.csv — the field survey (2 790 segments)            [versioned]
-data/external/  census 2024 + MBHT 2017 covariates per segment         [versioned]
+data/raw/       pac.csv — the field survey (2 790 segments, with registration year)   [versioned]
+data/external/  census 2024 + MBHT 2017 covariates per segment                        [versioned]
 src/rejas_gnn/
-  data/graph_builder.py   geometries → primal graph → line graph, 28 topological/geometric features, feature sets A/B
-  data/splits.py          spatial block k-fold with buffer
-  models/gnn_architectures.py   GCN · GraphSAGE · GATv2 ;  models/baselines.py  MLP · logistic
-  train.py                full-batch training, early stopping, repeated spatial CV
-  training/pipeline.py    the battery: ablation × models × seeds, calibration, map export
-  evaluation/metrics_and_calibration.py   PR/ROC-AUC, F1, MCC, Brier, ECE, isotonic, GeoPackage/GeoJSON
-scripts/        run_battery.py · fig_01_graph.py · fig_02_splits.py · fig_03_map.py · compare_results.py
-tests/          39 pytest tests
-docs/           guia_paso_a_paso.md (ES) · README_technical_v0.1.md · spatial_cv.md · figures/ · reference_results/{battery_linux_x86, battery_apple_m1}
+  data/graph_builder.py     geometries → primal graph → line graph, 28 features, feature sets A/B
+  data/features.py          feature matrix, imputation, one missingness flag per source
+  data/splits.py            spatial block k-fold with buffer
+  models/                   baselines.py (MLP, logistic) · gnn_architectures.py (GCN, GraphSAGE, GATv2)
+  metrics.py                ranking metrics, F1-optimal threshold, Moran's I
+  train.py                  training of one fold: full batch, weighted loss, early stopping
+  pipeline.py               one experiment from the CLI (`make run`)
+  training/pipeline.py      the battery: ablation × models × seeds, calibration, maps (`make run-all`)
+  evaluation/metrics_and_calibration.py   Brier, BSS, ECE, isotonic calibration, map export
+scripts/
+  run_battery.py · run_baselines.py · paired_comparison.py · cohort_analysis.py   the analyses
+  fig_01_graph.py · fig_02_splits.py · fig_03_map.py                              the figures
+tests/          42 pytest tests
+docs/
+  guia_paso_a_paso.md       Spanish step-by-step guide
+  spatial_cv.md             why spatial block CV with buffers
+  figures/                  figures of this report
+  reference_results/v03_apple_m1/   versioned reference results of v0.3
+  archive/v0.1-v0.2/        superseded results and documents, kept for traceability
 results/        generated, git-ignored
 ```
 

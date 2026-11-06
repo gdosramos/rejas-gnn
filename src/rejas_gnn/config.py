@@ -1,6 +1,6 @@
 """Typed experiment configuration loaded from YAML.
 
-Every parameter of the pipeline lives here; notebooks and scripts must not hard-code any.
+Every parameter of the pipeline lives here; scripts must not hard-code any.
 """
 from __future__ import annotations
 
