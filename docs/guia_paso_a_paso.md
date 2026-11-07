@@ -1,6 +1,7 @@
 # Guía paso a paso: qué calles se cierran en Pedro Aguirre Cerda y qué lo predice
 
-> Esta guía acompaña al [informe en inglés](../REPORT.md) y al [README](../README.md). Cuenta, en
+> Esta guía acompaña al [informe en inglés](../REPORT.md), a su [versión en PDF en español](informe/)
+> y al [README](../README.md). Cuenta, en
 > orden y con sus comandos, qué hace cada pieza del estudio y cómo leer lo que imprime. Las marcas
 > `[reproducido el AAAA-MM-DD en <máquina>]` indican dónde y cuándo se obtuvo cada cifra.
 > Versión 0.3: incorpora líneas base, comparaciones pareadas y el análisis por cohorte, y
@@ -25,7 +26,7 @@ no permite afirmar *por qué* los vecinos cierran.
 ```bash
 cd ~/Proyectos/rejas-gnn
 conda create -n rejas-gnn python=3.11 -y && conda activate rejas-gnn
-python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python3 -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 python3 -m pip install -r requirements-lock.txt     # versiones exactas de la corrida de referencia
 python3 -m pip install -e ".[dev]" --no-deps
 python3 -m pytest
